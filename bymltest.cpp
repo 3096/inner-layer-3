@@ -3,54 +3,7 @@
 #include <cstring>
 #include <iostream>
 
-const uint16_t LE_BYML_MAGIC = 0x4259; // hex for "YB"
-
-const uint8_t STR_NODE_TYPE         = 0xa0;
-const uint8_t PATH_NODE_TYPE        = 0xa1;
-const uint8_t ARRAY_NODE_TYPE       = 0xc0;
-const uint8_t DICT_NODE_TYPE        = 0xc1;
-const uint8_t STR_TAB_NODE_TYPE     = 0xc2;
-const uint8_t PATH_TAB_NODE_TYPE    = 0xc3;
-const uint8_t BOOL_NODE_TYPE        = 0xd0;
-const uint8_t INT_NODE_TYPE         = 0xd1;
-const uint8_t FLOAT_NODE_TYPE       = 0xd2;
-
-typedef struct {
-    uint16_t magic;
-    uint16_t vers;
-    uint32_t name_tab_ofst;
-    uint32_t str_val_tab_ofst;
-    uint32_t path_val_tab_ofst;    
-} BymlHeader;
-
-class OutOfBoundsException {};
-
-class StringTabNode {
-private:
-    int count = 0;
-    uint8_t* start;
-public:
-    StringTabNode(uint8_t* node_start);
-    ~StringTabNode();
-    
-    std::string operator[](int i);
-};
-
-StringTabNode::StringTabNode(uint8_t* node_start) {
-    start = node_start;
-    memcpy(&count, &start[1], 3);
-}
-
-StringTabNode::~StringTabNode() {
-
-}
-
-std::string StringTabNode::operator[](int i) {
-    if(i < 0 || i >= count)
-        throw OutOfBoundsException();
-    uint32_t str_val_ofst = *(uint32_t*)&start[4 + i*4];
-    return (char*)&start[str_val_ofst];
-}
+#include "BymlNodes.h"
 
 int main(int argc, char const *argv[]) {
     std::string path;
@@ -78,12 +31,17 @@ int main(int argc, char const *argv[]) {
     memcpy(&header, file, sizeof(header));
 
     if(file[header.name_tab_ofst] != STR_TAB_NODE_TYPE) {
-        std::cout << "Name table is not of string table type." << std::endl;
+        std::cout << "Name table error, expected string table type."
+            << std::endl;
         return -3;
     }
+
+    // Some testing code
     StringTabNode strTabNode(&file[header.name_tab_ofst]);
-    
     std::cout << strTabNode[0x2A] << std::endl;
+
+    DictNode root(&file[header.root_ofst], &file[header.name_tab_ofst]);
+    std::cout << root.getNodeNameByIndex(0) << std::endl;
 
     return 0;
 }
