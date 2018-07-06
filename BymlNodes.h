@@ -105,13 +105,6 @@ public:
 };
 
 
-DictNode::DictNode(uint8_t* node_start, uint8_t* str_tab_start, uint8_t* file_ptr):
-    Node(node_start), file(file_ptr) {
-    name_tab = new StringTabNode(str_tab_start);
-    nameTabNeedDelete = true;
-    memcpy(&count, &start[1], 3);
-}
-
 class ValueNode : public Node {
 private:
     int str_index = 0;
@@ -137,6 +130,18 @@ ValueNode::ValueNode(uint8_t* node_start, DictNode* parent_dict_ptr):
     memcpy(&str_index, node_start, 3);
     type = start[3];
     value = (uint32_t*)&start[4];
+}
+
+void ValueNode::setValue(const uint32_t& x) {
+    memcpy(value, &x, sizeof(x));
+}
+
+
+DictNode::DictNode(uint8_t* node_start, uint8_t* str_tab_start, uint8_t* file_ptr):
+    Node(node_start), file(file_ptr) {
+    name_tab = new StringTabNode(str_tab_start);
+    nameTabNeedDelete = true;
+    memcpy(&count, &start[1], 3);
 }
 
 DictNode::DictNode(ValueNode* value_node_ptr) {
@@ -192,10 +197,4 @@ std::string DictNode::getNodeNameByIndex(int i) {
     int name_index = 0;
     memcpy(&name_index, node_start, 3);
     return (*name_tab)[name_index];
-}
-
-
-
-void ValueNode::setValue(const uint32_t& x) {
-    memcpy(value, &x, sizeof(value));
 }
