@@ -9,7 +9,7 @@
 
 #include "BymlNodes.h"
 
-void dictNodeDeepValueReplace(DictNode& dict,
+void dictNodeDeepValueReplace(bool& foundReplace, DictNode& dict,
                                 std::string name, const uint32_t& value) {
     // Go over nodes one by one, poc before I add map
     for(int i = 0; i < dict.size(); i++) {
@@ -17,13 +17,14 @@ void dictNodeDeepValueReplace(DictNode& dict,
         uint8_t curNodeType = curNode.getType();
         if(curNodeType == DICT_NODE_TYPE) {
             DictNode childDictNode(&curNode);
-            dictNodeDeepValueReplace(childDictNode, name, value);
+            dictNodeDeepValueReplace(foundReplace, childDictNode, name, value);
         } else if (curNode.name() == name) {
             switch(curNodeType) {
             case BOOL_NODE_TYPE:
             case INT_NODE_TYPE:
             case FLOAT_NODE_TYPE:
                 curNode.setValue(value);
+                foundReplace = true;
                 std::cout << curNode.name() << " value set to 0x" << std::hex << value << std::endl;
                 break;
             default:
@@ -42,8 +43,10 @@ int bymlFileValueReplace(std::string file_path, std::string node_name, const uin
     uint8_t file[size];
     if(!fileis.read((char*)file, size)) {
         std::cout << "Could not open " << file_path << std::endl;
+        fileis.close();
         return -1;
     }
+    fileis.close();
 
     if(*(uint16_t*)file != LE_BYML_MAGIC) {
         std::cout << file_path << "is not Little Endian" << std::endl;
@@ -60,21 +63,27 @@ int bymlFileValueReplace(std::string file_path, std::string node_name, const uin
     }
 
     DictNode root(&file[header.root_ofst], &file[header.name_tab_ofst], file);
-    dictNodeDeepValueReplace(root, node_name, value);
+    bool foundReplace = false;
+    dictNodeDeepValueReplace(foundReplace, root, node_name, value);
+    if(foundReplace) {
+        std::cout << "Done with " << file_path << std::endl;
 
-    std::string backup_path = file_path + ".bak";
-    if(access(backup_path.c_str(), F_OK) == -1) {
-        if(rename(file_path.c_str(), backup_path.c_str()) != 0) {
-            std::cout << "Failed to create backup for " << file_path << ", abort." << std::endl;
-            return -4;
+        std::string backup_path = file_path + ".bak";
+        if(access(backup_path.c_str(), F_OK) == -1) {
+            if(std::rename(file_path.c_str(), backup_path.c_str()) != 0) {
+                std::cout << "Failed to create backup for " << file_path << ", abort." << std::endl;
+                return -4;
+            }
         }
+
+        std::ofstream fileos(file_path, std::ios::binary);
+        if(!fileos.write((char*)file, size)) {
+            std::cout << "Could not write " << file_path << std::endl;
+            return -6;
+        }
+        fileos.close();
     }
 
-    std::ofstream fileos(file_path, std::ios::binary);
-    if(!fileos.write((char*)file, size)) {
-        std::cout << "Could not write " << file_path << std::endl;
-        return -6;
-    }
     return 0;
 }
 
@@ -137,11 +146,9 @@ int main(int argc, char const *argv[]) {
                     std::string file_name = ent->d_name;
                     if(file_name.substr(file_name.length()-4) == ".bak")
                         continue;
-                    std::cout << "File " << ent->d_name << std::endl;
                     std::string file_path = argv[1];
                     file_path = file_path + file_name;
                     bymlFileValueReplace(file_path, node_name, value);
-                    std::cout << "Done with " << ent->d_name << std::endl;
                 }
                 closedir (dir);
             } else {
